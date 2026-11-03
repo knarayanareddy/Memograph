@@ -112,14 +112,15 @@ in `SQLiteVectorStore`.
 `LocalMemograph`, a standalone SQLite-backed store using Node.js 22.5+
 `node:sqlite`. Both share types, validation, and SHA-256 stable IDs. The local
 store regenerates `MEMORY.md` and topic views from SQLite and enforces the same
-index limits.
+index limits, `realpath`-based path containment, and bounded transcript grep.
 
 ## Reproducibility and docs
 
-`uv.lock` resolves all Python extras, and CI installs with `uv sync --frozen`.
+`uv.lock` resolves all Python extras; core CI jobs install narrow `dev`/`api`/
+`docs` extras, while only the real SDK integration job installs `--all-extras`.
 MkDocs + mkdocstrings generate the published site from short Markdown and
-Python docstrings. Release workflows publish Python, npm, and GitHub artifacts
-from tags.
+Python docstrings. SHA-pinned release workflows publish Python, npm, and GitHub
+artifacts from tags.
 
 ## Tests and CI
 
@@ -128,5 +129,5 @@ the lock, gates, consolidation parsing/execution, providers, context injection,
 the vector store, adapters, the REST API, packaging, docs, and the CLI.
 Integration tests marked `integration` import the real framework SDKs. The
 TypeScript package has its own `node:test` suites. `.github/workflows/ci.yml`
-runs Ruff, mypy, pytest, integration tests, `mkdocs build --strict`, npm tests,
-and a package build on Python 3.11–3.13 and Node.js 22.
+runs Ruff, mypy, pytest, security scans, integration tests, npm tests, and a
+package build on Python 3.11–3.13 and Node.js 22, 24, and 26.

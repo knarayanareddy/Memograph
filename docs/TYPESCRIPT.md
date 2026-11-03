@@ -1,8 +1,10 @@
 # TypeScript SDK
 
 The [`memograph-sdk` package](https://github.com/knarayanareddy/Memograph/tree/main/sdk/typescript)
-lives in `sdk/typescript`. It requires Node.js 22.5+ because `LocalMemograph`
-uses experimental `node:sqlite`.
+lives in `sdk/typescript`. It supports Node.js 22, 24, and 26 because
+`LocalMemograph` uses `node:sqlite`; CI and releases use Node 26 and TypeScript
+7. Loopback HTTP is allowed for local development, but remote clients must use
+HTTPS/WSS.
 
 ## Install
 
@@ -37,8 +39,10 @@ for await (const event of events) {
 ```
 
 `MemographClient` covers every REST endpoint, accepts an injected `fetch`
-implementation for testing, and raises `MemographError` on non-2xx responses.
-The WebSocket client sends the API key in handshake headers, not the URL.
+implementation for testing, raises `MemographError` on non-2xx responses, and
+requires a sufficiently long API key. The WebSocket client sends the key in
+handshake headers, not the URL. Request bodies are bounded to 1 MiB by default;
+`health()` reports the server's `single-user-shared-key` auth model.
 
 ## Local SQLite store
 
@@ -61,16 +65,20 @@ node --experimental-sqlite your-script.js
 `LocalMemograph` implements topics, facts, generated JSON/Markdown views, index
 limits, keyword recall, context budgeting, transcript archiving, grep, offline
 consolidation, SHA-256 stable IDs, and startup reconciliation. It is offline and
-does not call an LLM provider.
+does not call an LLM provider. Topic IDs, content, tags, and grep patterns are
+bounded to the same limits as the Python implementation; `safePath` uses
+`realpath` to reject symlink escapes. Transcript grep escapes literal patterns,
+rejects suspicious regex constructs, and clips snippets to 200 characters.
 
 ## Development
 
 ```bash
 cd sdk/typescript
 npm ci
-npm test
+npm test -- --run
 npm run typecheck
 ```
 
-`npm test` compiles TypeScript and runs `node:test` suites. CI runs `npm ci`
-and `npm test` on Node.js 22. See [Releasing](RELEASING.md) for npm publishing.
+`npm test` compiles TypeScript and runs `node:test` suites. CI runs `npm ci`,
+`npm test`, `npm run typecheck`, and `npm run build` on Node.js 22, 24, and 26.
+See [Releasing](RELEASING.md) for npm publishing.

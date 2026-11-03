@@ -55,7 +55,11 @@ def test_readme_and_hygiene():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "Status" in readme
     assert 'pip install -e ".[dev]"' in readme
+    assert "uv sync --frozen --extra dev --extra api --extra docs" in readme
     assert "uv sync --all-extras --frozen" in readme
+    assert "make security" in readme
+    assert "single-user" in readme
+    assert "127.0.0.1" in readme
     assert "docs/ROADMAP.md" in readme
     assert "REST API" in readme
     assert "TypeScript SDK" in readme

@@ -26,10 +26,12 @@ dependencies = [
   "httpx>=0.27,<1",
   "pydantic>=2.7,<3",
   "pydantic-settings>=2.2,<3",
+  "regex>=2026.1.15,<2026.2",
 ]
 
 [project.optional-dependencies]
 dev = [
+  "bandit>=1.9,<2",
   "build>=1.2,<2",
   "mypy>=1.9,<2",
   "pytest>=8,<10",
@@ -53,6 +55,12 @@ docs = [
   "mkdocstrings[python]>=0.25,<2",
 ]
 all = [
+  "aiosqlite>=0.20,<1",
+  "bandit>=1.9,<2",
+  "httpx>=0.27,<1",
+  "pydantic>=2.7,<3",
+  "pydantic-settings>=2.2,<3",
+  "regex>=2026.1.15,<2026.2",
   "build>=1.2,<2",
   "mypy>=1.9,<2",
   "pytest>=8,<10",
@@ -80,9 +88,7 @@ Issues = "https://github.com/knarayanareddy/Memograph/issues"
 Documentation = "https://knarayanareddy.github.io/Memograph/"
 
 [tool.uv]
-# pyarrow 26.0.1 was published without Linux wheels at lockfile generation time.
-# Constrain it until a compatible manylinux release is available.
-constraint-dependencies = ["pyarrow<26"]
+# The lockfile pins exact versions; current pyarrow releases provide Linux wheels.
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/memograph"]
@@ -95,6 +101,7 @@ include = [
   "examples",
   "sdk/typescript",
   ".github/workflows",
+  ".github/dependabot.yml",
   "README.md",
   "LICENSE",
   "CONTRIBUTING.md",
@@ -128,12 +135,20 @@ line-length = 100
 extend-exclude = ["docs/archive", "*.md", "site", "sdk/typescript/dist", "sdk/typescript/node_modules"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E", "F", "I", "UP", "B", "S"]
 ignore = ["E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S603"]
+"scripts/**" = ["S603"]
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.bandit]
+# CI runs `bandit -c pyproject.toml -r src/memograph -ll`; only source is scanned.
+exclude_dirs = ["tests", "sdk", "docs", "scripts"]
 
 [tool.mypy]
 # Target the active interpreter; CI passes --python-version explicitly.

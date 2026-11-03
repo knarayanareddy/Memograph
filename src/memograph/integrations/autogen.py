@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeAlias
 
 try:
     from autogen_agentchat.messages import BaseMessage as AutoGenBaseMessage
@@ -17,7 +17,7 @@ from ..injection import BuiltContext
 from ..validation import stable_id
 from .common import clip_text
 
-AutoGenMessage = AutoGenBaseMessage | TextMessage | MultiModalMessage | str
+AutoGenMessage: TypeAlias = AutoGenBaseMessage | TextMessage | MultiModalMessage | str
 
 
 def _message_parts(message: AutoGenMessage) -> tuple[str, str, str]:

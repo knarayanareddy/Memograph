@@ -26,13 +26,16 @@ cp .env.example .env          # optional; see below
 pytest -m "not integration"
 ```
 
-For a fully locked environment with every optional extra, use
-[Astral uv](https://docs.astral.sh/uv/):
+For a locked core environment without the vulnerable ChromaDB transitive
+dependency, use [Astral uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv sync --all-extras --frozen
+uv sync --frozen --extra dev --extra api --extra docs
 uv run --no-sync pytest -m "not integration"
 ```
+
+Use `uv sync --all-extras --frozen` only for the real SDK integration job. See
+[SECURITY.md](SECURITY.md) for the documented advisory exceptions.
 
 Use the CLI without any network service:
 
@@ -73,17 +76,21 @@ asyncio.run(main())
 
 ## REST API
 
-Install the API extra and set a shared secret before starting the service:
+Install the API extra and set a high-entropy shared secret before starting the
+service. This API is **explicitly single-user**: one key grants full access to
+the configured agent's memory store.
 
 ```bash
 pip install -e ".[api]"
 export MEMOGRAPH_API_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-memograph-api --host 0.0.0.0 --port 8000
+memograph-api --host 127.0.0.1 --port 8000
 ```
 
 Every memory route and the `/events` WebSocket require `X-API-Key` or
-`Authorization: Bearer`. CORS is off by default, and requests are rate-limited.
-See [docs/REST_API.md](docs/REST_API.md).
+`Authorization: Bearer`. The default bind host is loopback, CORS is off by
+default, request bodies/connections/LLM tokens are bounded, and requests are
+rate-limited. Terminate TLS at a reverse proxy for remote access. See
+[docs/REST_API.md](docs/REST_API.md).
 
 ## Framework integrations
 
@@ -95,12 +102,13 @@ backend and task-output adapter, and an AutoGen message memory. See
 ## TypeScript SDK
 
 `sdk/typescript` contains `MemographClient` for the REST/WebSocket service and
-`LocalMemograph`, a standalone SQLite-backed store. Node.js 22.5+ is required.
+`LocalMemograph`, a standalone SQLite-backed store. Node.js 22, 24, or 26 is
+supported; CI and releases use Node 26.
 
 ```bash
 cd sdk/typescript
 npm ci
-npm test
+npm test -- --run
 ```
 
 See [docs/TYPESCRIPT.md](docs/TYPESCRIPT.md).
@@ -116,7 +124,7 @@ All providers use `httpx` directly; there are no hidden SDK extras.
 | `groq` | `GROQ_API_KEY` | Chat Completions-compatible |
 | `custom` | `CUSTOM_API_KEY` / `MEMOGRAPH_CUSTOM_API_KEY` | Set `MEMOGRAPH_CUSTOM_BASE_URL` |
 | `anthropic` | `ANTHROPIC_API_KEY` | Messages API |
-| `gemini` | `GOOGLE_API_KEY` | `generateContent` API |
+| `gemini` | `GOOGLE_API_KEY` | `generateContent` API; key sent in a header |
 | `none` | none | Offline; returns an empty consolidation plan |
 
 Library settings use the `MEMOGRAPH_` prefix, for example
@@ -146,8 +154,10 @@ Never commit `.env`, database files, generated memory stores, API keys, or npm
 tokens. The REST API requires a configured key by default; WebSocket handshakes
 use the same key; CORS is deny-by-default. Untrusted transcript and LLM text is
 treated as data: topic IDs are validated, paths are contained, consolidation
-output is schema-validated, and no `pickle` deserialization is used. See
-[SECURITY.md](SECURITY.md).
+output is schema-validated, prompt delimiters are escaped, and no `pickle`
+deserialization is used. CI runs SHA-pinned actions, Dependabot, Bandit, Ruff
+security rules, `npm audit`, and isolated `pip-audit`; run `make security`
+locally. See [SECURITY.md](SECURITY.md).
 
 ## License
 

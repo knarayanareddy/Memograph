@@ -15,12 +15,30 @@ import type {
   WriteResult,
 } from "./types.js";
 import {
+  MAX_FACT_CHARS,
+  MAX_GREP_PATTERN_CHARS,
+  MAX_INDEX_BYTES,
+  MAX_INDEX_LINES,
+  MAX_POINTER_CHARS,
+  MAX_SNIPPET_CHARS,
   MemographError,
   assertAgentId,
+  assertConfidence,
+  assertContent,
+  assertId,
+  assertMaxResults,
+  assertQuery,
+  assertRegexPattern,
+  assertSource,
+  assertString,
+  assertTags,
+  assertTopK,
   assertTopicId,
+  assertVerificationHint,
   clipText,
   estimateTokens,
   nowIso,
+  safePath,
   stableId,
 } from "./validation.js";
 
@@ -35,10 +53,6 @@ interface Pointer {
   last_modified: string;
 }
 
-const MAX_INDEX_LINES = 200;
-const MAX_INDEX_BYTES = 25_600;
-const MAX_POINTER_CHARS = 150;
-const MAX_FACT_CHARS = 1_000;
 const DEFAULT_CONTEXT_TOKENS = 8_192;
 const OUTPUT_RESERVATION = 2_048;
 const CONFIDENCE_SCORE: Record<ConfidenceLevel, number> = {
@@ -180,12 +194,7 @@ export class LocalMemograph {
   }
 
   private safePath(base: string, ...parts: string[]): string {
-    const resolved = path.resolve(base, ...parts);
-    const root = path.resolve(base) + path.sep;
-    if (!resolved.startsWith(root)) {
-      throw new MemographError("Path escape rejected");
-    }
-    return resolved;
+    return safePath(base, ...parts);
   }
 
   private atomicWrite(target: string, content: string): void {
@@ -413,18 +422,18 @@ export class LocalMemograph {
     options: RememberOptions = {},
   ): Promise<WriteResult> {
     assertTopicId(topicId);
-    const text = clipText(content, MAX_FACT_CHARS);
-    if (!text.trim()) throw new MemographError("content must be non-empty");
-    if (!source.trim()) throw new MemographError("source must be non-empty");
-    const confidence = options.confidence ?? "observed";
-    if (confidence === "verified" && !options.verificationHint) {
+    const text = clipText(assertContent(content), MAX_FACT_CHARS);
+    const safeSource = assertSource(source);
+    const confidence = assertConfidence(options.confidence);
+    const verificationHint = assertVerificationHint(options.verificationHint);
+    if (confidence === "verified" && !verificationHint) {
       throw new MemographError("verified facts require a verification hint");
     }
     const db = this.assertOpen();
     const now = nowIso();
-    const factId = stableId(`${topicId}|${text}|${source}|${now}`, "fact", 8);
+    const factId = stableId(`${topicId}|${text}|${safeSource}|${now}`, "fact", 8);
     const topicName = options.topicName ?? titleize(topicId);
-    const tags = JSON.stringify(options.tags ?? []);
+    const tags = JSON.stringify(assertTags(options.tags));
     const meta = JSON.stringify(options.meta ?? {});
     const lastVerified = confidence === "verified" ? now : null;
     let pointers: Pointer[] = [];
@@ -454,7 +463,7 @@ export class LocalMemograph {
         topicId,
         factId,
         text,
-        source.trim(),
+        safeSource,
         confidence,
         options.verificationHint ?? null,
         now,
@@ -477,8 +486,10 @@ export class LocalMemograph {
   }
 
   async recall(query: string, topK = 3): Promise<TopicFile[]> {
+    const safeQuery = assertQuery(query);
+    const safeTopK = assertTopK(topK);
     const db = this.assertOpen();
-    const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const terms = safeQuery.toLowerCase().split(/\s+/).filter(Boolean);
     if (terms.length === 0) return [];
     const scored = this.allTopics(db).map((topic) => {
       const haystack = [
@@ -498,23 +509,24 @@ export class LocalMemograph {
     return scored
       .filter((item) => item.score > 0)
       .sort((left, right) => right.score - left.score || left.topic.topic_id.localeCompare(right.topic.topic_id))
-      .slice(0, Math.max(1, topK))
+      .slice(0, safeTopK)
       .map((item) => item.topic);
   }
 
   async forget(topicId: string, factId?: string): Promise<boolean> {
     assertTopicId(topicId);
+    const safeFactId = factId === undefined ? undefined : assertId(factId, "fact_id");
     const db = this.assertOpen();
     let changed = false;
     let pointers: Pointer[] = [];
     this.transaction(() => {
-      if (factId) {
+      if (safeFactId) {
         changed =
           this.run(
             "DELETE FROM facts WHERE agent_id = ? AND topic_id = ? AND fact_id = ?",
             this.agentId,
             topicId,
-            factId,
+            safeFactId,
           ) > 0;
       } else {
         changed =
@@ -538,25 +550,28 @@ export class LocalMemograph {
     options: UpdateOptions = {},
   ): Promise<boolean> {
     assertTopicId(topicId);
+    const safeFactId = assertId(factId, "fact_id");
     const db = this.assertOpen();
     const existing = this.row(
       "SELECT * FROM facts WHERE agent_id = ? AND topic_id = ? AND fact_id = ?",
       this.agentId,
       topicId,
-      factId,
+      safeFactId,
     );
     if (!existing) return false;
-    const confidence =
-      options.newConfidence ?? (String(existing.confidence) as ConfidenceLevel);
-    if (confidence === "verified" && !options.verificationSource) {
+    const confidence = assertConfidence(
+      options.newConfidence ?? (String(existing.confidence) as ConfidenceLevel),
+    );
+    const verificationSource = assertVerificationHint(options.verificationSource);
+    if (confidence === "verified" && !verificationSource) {
       throw new MemographError("verified confidence requires verificationSource");
     }
     const content =
       options.newContent !== undefined
-        ? clipText(options.newContent, MAX_FACT_CHARS)
+        ? clipText(assertContent(options.newContent), MAX_FACT_CHARS)
         : String(existing.content);
     const verificationHint =
-      options.verificationSource ?? (existing.verification_hint ? String(existing.verification_hint) : null);
+      verificationSource ?? (existing.verification_hint ? String(existing.verification_hint) : null);
     const lastVerified =
       confidence === "verified"
         ? nowIso()
@@ -637,19 +652,21 @@ export class LocalMemograph {
     maxTopics = 3,
     tokenBudget?: number,
   ): Promise<ContextResult> {
+    const safeQuery = assertQuery(query);
+    const safeMaxTopics = assertTopK(maxTopics);
     const available =
       tokenBudget ?? Math.max(1, DEFAULT_CONTEXT_TOKENS - OUTPUT_RESERVATION);
     const indexText = await this.index();
     const indexTokens = estimateTokens(indexText);
     const prefix =
       "Memories are hints, not ground truth. Verify against the codebase before acting on them.\n\n" +
-      `# Memograph Context\nQuery: ${query}\n\n`;
+      `# Memograph Context\nQuery: ${safeQuery}\n\n`;
     let text = prefix + indexText;
     let totalTokens = estimateTokens(text);
     if (totalTokens > available) {
       throw new MemographError("Index does not fit within the token budget");
     }
-    const topics = await this.recall(query, maxTopics);
+    const topics = await this.recall(safeQuery, safeMaxTopics);
     const loaded: string[] = [];
     let topicTokens = 0;
     for (const topic of topics) {
@@ -779,6 +796,8 @@ export class LocalMemograph {
     content: string,
     toolCalls: unknown[] = [],
   ): Promise<void> {
+    const safeRole = assertSource(role);
+    const safeContent = assertContent(content);
     if (!this.currentSessionId) await this.startSession();
     const sessionId = this.currentSessionId as string;
     this.run(
@@ -788,8 +807,8 @@ export class LocalMemograph {
       this.agentId,
       sessionId,
       this.turnIndex,
-      role,
-      content,
+      safeRole,
+      safeContent,
       JSON.stringify(toolCalls),
       nowIso(),
     );
@@ -809,7 +828,7 @@ export class LocalMemograph {
       this.agentId,
       Math.max(1, limit),
     );
-    return rows.reverse().map((row) => clipText(String(row.content), 200));
+    return rows.reverse().map((row) => clipText(String(row.content), MAX_SNIPPET_CHARS));
   }
 
   async grepTranscripts(
@@ -817,17 +836,13 @@ export class LocalMemograph {
     maxResults = 20,
     regex = false,
   ): Promise<Array<Record<string, unknown>>> {
+    const safeMaxResults = assertMaxResults(maxResults);
     let matcher: (value: string) => boolean;
     if (regex) {
-      let compiled: RegExp;
-      try {
-        compiled = new RegExp(pattern);
-      } catch {
-        throw new MemographError("Invalid regex pattern");
-      }
+      const compiled = new RegExp(assertRegexPattern(pattern), "i");
       matcher = (value) => compiled.test(value);
     } else {
-      const needle = pattern.toLowerCase();
+      const needle = assertString(pattern, "pattern", MAX_GREP_PATTERN_CHARS).toLowerCase();
       matcher = (value) => value.toLowerCase().includes(needle);
     }
     const rows = this.rows(
@@ -842,10 +857,10 @@ export class LocalMemograph {
       results.push({
         session_id: String(row.session_id),
         role: String(row.role),
-        content: clipText(content, 200),
+        content: clipText(content, MAX_SNIPPET_CHARS),
         created_at: String(row.created_at),
       });
-      if (results.length >= Math.max(1, maxResults)) break;
+      if (results.length >= safeMaxResults) break;
     }
     return results;
   }

@@ -259,6 +259,10 @@ class GeminiProvider(BaseLLMProvider):
             raise ProviderError("GOOGLE_API_KEY is required for the Gemini provider")
         model = request.model or self.config.model
         url = f"{self.config.base_url.rstrip('/')}/models/{model}:generateContent"
+        headers = {
+            "x-goog-api-key": self.config.api_key,
+            "content-type": "application/json",
+        }
         contents: list[dict[str, Any]] = []
         for message in request.effective_messages():
             role = "model" if message.role == "assistant" else "user"
@@ -272,7 +276,7 @@ class GeminiProvider(BaseLLMProvider):
             },
         }
         started = time.monotonic()
-        response = await self._client.post(url, params={"key": self.config.api_key}, json=payload)
+        response = await self._client.post(url, headers=headers, json=payload)
         response.raise_for_status()
         data = response.json()
         try:

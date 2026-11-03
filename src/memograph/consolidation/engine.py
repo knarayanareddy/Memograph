@@ -40,6 +40,11 @@ def _parse_dt(value: str | None) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
+def _escape_prompt_text(value: str) -> str:
+    """Neutralize delimiter-like characters in untrusted prompt content."""
+    return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 @dataclass
 class DreamResult:
     run_id: str
@@ -67,13 +72,14 @@ class DreamEngine:
 
     MAX_OPERATIONS = 50
 
-    def __init__(self, manager: MemoryManager):
+    def __init__(self, manager: MemoryManager, max_tokens: int = 2048):
         self.manager = manager
         self.db = manager.db
         self.agent_id = manager.agent_id
         self.config = manager.config
         self.llm = manager.llm
         self.lock = ConsolidationLock(manager.base_path)
+        self.max_tokens = max_tokens
         limits = manager.config.limits
         self.gates = ConsolidationGates(
             min_hours=limits.min_consolidation_hours,
@@ -136,7 +142,7 @@ class DreamEngine:
                     request = LLMRequest(
                         messages=[Message(role="user", content=prompt)],
                         system_prompt=self._system_prompt(),
-                        max_tokens=2048,
+                        max_tokens=self.max_tokens,
                         temperature=0.0,
                         purpose="consolidation",
                     )
@@ -265,9 +271,12 @@ class DreamEngine:
             "Return JSON like:\n"
             + json.dumps(schema, indent=2)
             + "\n\n<untrusted_memory>\n"
-            + index_markdown[:8000]
+            + _escape_prompt_text(index_markdown[:8000])
             + "\n</untrusted_memory>\n\n<untrusted_signals>\n"
-            + json.dumps(signals[:20], ensure_ascii=False)
+            + json.dumps(
+                [_escape_prompt_text(signal) for signal in signals[:20]],
+                ensure_ascii=False,
+            )
             + "\n</untrusted_signals>"
         )
 

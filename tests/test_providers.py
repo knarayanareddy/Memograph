@@ -38,6 +38,8 @@ def handler(request: httpx.Request) -> httpx.Response:
             },
         )
     if "generateContent" in path:
+        assert "key" not in request.url.params
+        assert request.headers.get("x-goog-api-key") == "test"
         return httpx.Response(
             200,
             json={

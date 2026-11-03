@@ -92,6 +92,7 @@ export interface EventSubscription extends AsyncIterableIterator<MemographEvent>
 export interface HealthResponse {
   status: string;
   version: string;
+  auth_model: string;
 }
 
 export interface RememberRequest {

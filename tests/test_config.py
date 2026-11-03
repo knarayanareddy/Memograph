@@ -5,7 +5,14 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from memograph.config import LLMProvider, MemoGraphConfig, get_config, reset_config
+from memograph.config import (
+    LLMProvider,
+    MemoGraphConfig,
+    MemoryLimits,
+    ProviderConfig,
+    get_config,
+    reset_config,
+)
 
 
 def test_defaults():
@@ -15,6 +22,8 @@ def test_defaults():
     assert cfg.auto_consolidate is False
     assert cfg.skeptical_mode is True
     assert cfg.resolved_db_path == Path(".memograph/memograph.db")
+    assert cfg.limits.max_grep_pattern_chars == 200
+    assert cfg.limits.grep_timeout_seconds == 0.05
 
 
 def test_standard_provider_env(monkeypatch):
@@ -47,6 +56,23 @@ def test_provider_overrides():
     assert active.model == "override-model"
     assert active.api_key == "override-key"
     assert active.base_url == "http://local/v1"
+
+
+def test_provider_base_url_is_validated():
+    with pytest.raises(PydanticValidationError):
+        ProviderConfig(provider=LLMProvider.CUSTOM, base_url="file:///etc/passwd")
+    with pytest.raises(PydanticValidationError):
+        ProviderConfig(
+            provider=LLMProvider.CUSTOM,
+            base_url="https://user:secret@example.test/v1",
+        )
+    with pytest.raises(PydanticValidationError):
+        MemoGraphConfig().get_active_provider_config(base_url="ftp://example.test")
+
+
+def test_memory_limits_reject_non_positive_values():
+    with pytest.raises(PydanticValidationError):
+        MemoryLimits(grep_timeout_seconds=0)
 
 
 def test_singleton():

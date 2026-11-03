@@ -11,6 +11,14 @@ class ValidationError(MemoGraphError, ValueError):
     """Raised when caller- or model-supplied data is unsafe or malformed."""
 
 
+class ConfigurationError(MemoGraphError):
+    """Raised when the runtime configuration is invalid or incomplete."""
+
+
+class ResourceLimitError(MemoGraphError):
+    """Raised when a configured resource limit would be exceeded."""
+
+
 class IndexLimitError(MemoGraphError):
     """Raised when an index update would exceed a hard bandwidth limit."""
 
