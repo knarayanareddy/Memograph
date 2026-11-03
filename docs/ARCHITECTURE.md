@@ -1,8 +1,9 @@
 # Architecture
 
 This document is the canonical architecture. The historical 27,000-line design
-export is archived at [archive/memo.md](archive/memo.md) and is **not** a source
-of implementation truth.
+export is archived at
+[docs/archive/memo.md on GitHub](https://github.com/knarayanareddy/Memograph/blob/main/docs/archive/memo.md)
+and is **not** a source of implementation truth.
 
 ## Layers
 
@@ -58,7 +59,8 @@ a strict discriminated union of `merge`, `resolve_contradiction`, `promote`, and
 `validation.validate_topic_id()` permits only `^[a-z][a-z0-9_]{0,49}$`.
 `safe_relative_path()` resolves a candidate under a base directory and rejects
 absolute paths, `..`, and symlink escapes. All topic, transcript, and index
-paths go through these helpers.
+paths go through these helpers. The TypeScript local store uses the same topic
+ID grammar and a contained-path helper.
 
 Persistent IDs use SHA-256 (`stable_id()`), never Python's per-process
 `hash()`.
@@ -85,10 +87,46 @@ undefined optional-dependency extras.
 applied in Python, never interpolated into SQL. There is no `pickle` and no
 `faiss` dependency.
 
+## REST and WebSocket API
+
+`src/memograph/api/` is an optional FastAPI application factory. A configured
+API key is mandatory; `X-API-Key` or `Authorization: Bearer` is checked in
+constant time. Protected routes use an in-process sliding-window limiter and an
+`APIRouter` dependency, so `/status`, `/remember`, `/recall`, `/forget`,
+`/update`, `/context`, `/dream`, `/prune`, `/index`, and `/grep` cannot be
+called anonymously. `/events` streams JSON events over an authenticated
+WebSocket. CORS middleware is added only for explicitly configured origins.
+
+## Framework integrations
+
+`src/memograph/integrations/` contains real SDK adapters for LangChain,
+CrewAI, and AutoGen. They are imported lazily and require the `integrations`
+extra. `AsyncBridge` keeps synchronous SDK calls on one event-loop thread;
+AutoGen uses its native async interface. CrewAI records are stored in a
+dedicated SQLite table, mirrored into Memograph views, and optionally indexed
+in `SQLiteVectorStore`.
+
+## TypeScript SDK
+
+`sdk/typescript/` provides `MemographClient` for the REST/WebSocket API and
+`LocalMemograph`, a standalone SQLite-backed store using Node.js 22.5+
+`node:sqlite`. Both share types, validation, and SHA-256 stable IDs. The local
+store regenerates `MEMORY.md` and topic views from SQLite and enforces the same
+index limits.
+
+## Reproducibility and docs
+
+`uv.lock` resolves all Python extras, and CI installs with `uv sync --frozen`.
+MkDocs + mkdocstrings generate the published site from short Markdown and
+Python docstrings. Release workflows publish Python, npm, and GitHub artifacts
+from tags.
+
 ## Tests and CI
 
 `tests/` covers validation, models, atomic writes, the database, the manager,
 the lock, gates, consolidation parsing/execution, providers, context injection,
-the vector store, adapters, packaging, docs, and the CLI.
-`.github/workflows/ci.yml` runs Ruff, mypy, pytest with coverage, and a package
-build on Python 3.11–3.13.
+the vector store, adapters, the REST API, packaging, docs, and the CLI.
+Integration tests marked `integration` import the real framework SDKs. The
+TypeScript package has its own `node:test` suites. `.github/workflows/ci.yml`
+runs Ruff, mypy, pytest, integration tests, `mkdocs build --strict`, npm tests,
+and a package build on Python 3.11–3.13 and Node.js 22.

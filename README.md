@@ -7,25 +7,34 @@ on-demand topic files, archives raw transcripts separately, and consolidates
 memories under an exclusive lock. SQLite is the source of truth; Markdown and
 JSON topic files are generated views that are rebuilt at startup.
 
-> **Status: early alpha.** Core storage, index limits, safe writes, providers,
-> consolidation, a CLI, tests, and CI are implemented. Phases 7–10 of the
-> original 10-phase roadmap (full framework integrations, REST API, TypeScript
-> port, published docs) are deferred. See [docs/ROADMAP.md](docs/ROADMAP.md)
+> **Status: beta.** Core storage, index limits, safe writes, providers,
+> consolidation, a CLI, an authenticated REST/WebSocket API, real framework SDK
+> integrations, a TypeScript SDK, published docs, release automation, tests,
+> CI, and a reproducible `uv.lock` are implemented. Phases 7–10 of the original
+> 10-phase roadmap are no longer deferred. See [docs/ROADMAP.md](docs/ROADMAP.md)
 > and [docs/SPEC_STATUS.md](docs/SPEC_STATUS.md).
 
 ## Quickstart
 
-Python 3.11+ is required.
+Python 3.11–3.13 is supported. The offline provider (`none`) needs no API key.
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env          # optional; see below
-pytest
+pytest -m "not integration"
 ```
 
-Use the offline provider (`none`) for a first run without any network service:
+For a fully locked environment with every optional extra, use
+[Astral uv](https://docs.astral.sh/uv/):
+
+```bash
+uv sync --all-extras --frozen
+uv run --no-sync pytest -m "not integration"
+```
+
+Use the CLI without any network service:
 
 ```bash
 memograph --provider none status
@@ -62,6 +71,40 @@ async def main():
 asyncio.run(main())
 ```
 
+## REST API
+
+Install the API extra and set a shared secret before starting the service:
+
+```bash
+pip install -e ".[api]"
+export MEMOGRAPH_API_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+memograph-api --host 0.0.0.0 --port 8000
+```
+
+Every memory route and the `/events` WebSocket require `X-API-Key` or
+`Authorization: Bearer`. CORS is off by default, and requests are rate-limited.
+See [docs/REST_API.md](docs/REST_API.md).
+
+## Framework integrations
+
+Install real SDK integrations with `pip install -e ".[integrations]"`.
+`memograph.integrations` provides LangChain chat history, a CrewAI storage
+backend and task-output adapter, and an AutoGen message memory. See
+[docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+
+## TypeScript SDK
+
+`sdk/typescript` contains `MemographClient` for the REST/WebSocket service and
+`LocalMemograph`, a standalone SQLite-backed store. Node.js 22.5+ is required.
+
+```bash
+cd sdk/typescript
+npm ci
+npm test
+```
+
+See [docs/TYPESCRIPT.md](docs/TYPESCRIPT.md).
+
 ## Providers
 
 All providers use `httpx` directly; there are no hidden SDK extras.
@@ -82,20 +125,29 @@ See [.env.example](.env.example) for the full template.
 
 ## Documentation
 
+The published site is at
+<https://knarayanareddy.github.io/Memograph/>.
+
 - [Architecture](docs/ARCHITECTURE.md) — canonical design and invariants
 - [Roadmap](docs/ROADMAP.md) — honest implementation status
-- [Decisions](docs/DECISIONS.md) — why the historical spec was changed
-- [Spec status](docs/SPEC_STATUS.md) — review findings and their resolution
-- [References](docs/REFERENCES.md) — primary sources for APIs used here
+- [Decisions](docs/DECISIONS.md) — ADRs
+- [Spec status](docs/SPEC_STATUS.md) — review findings and resolution
+- [REST API](docs/REST_API.md) — authenticated service and WebSocket events
+- [Integrations](docs/INTEGRATIONS.md) — LangChain, CrewAI, AutoGen
+- [TypeScript SDK](docs/TYPESCRIPT.md) — client and local store
+- [Releasing](docs/RELEASING.md) — PyPI/npm/GitHub release process
+- [References](docs/REFERENCES.md) — primary sources
 - [Examples](examples/README.md) — runnable offline walkthrough
 - [docs/archive/memo.md](docs/archive/memo.md) — archived historical design draft
 
 ## Security
 
-Never commit `.env`, database files, or generated memory stores. Untrusted
-transcript and LLM text is treated as data: topic IDs are validated, paths are
-contained, consolidation output is schema-validated, and no `pickle`
-deserialization is used. See [SECURITY.md](SECURITY.md).
+Never commit `.env`, database files, generated memory stores, API keys, or npm
+tokens. The REST API requires a configured key by default; WebSocket handshakes
+use the same key; CORS is deny-by-default. Untrusted transcript and LLM text is
+treated as data: topic IDs are validated, paths are contained, consolidation
+output is schema-validated, and no `pickle` deserialization is used. See
+[SECURITY.md](SECURITY.md).
 
 ## License
 

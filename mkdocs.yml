@@ -1,0 +1,72 @@
+site_name: Memograph
+site_description: A self-healing, bandwidth-aware memory system for AI agents
+site_url: https://knarayanareddy.github.io/Memograph/
+repo_url: https://github.com/knarayanareddy/Memograph
+repo_name: knarayanareddy/Memograph
+edit_uri: edit/main/docs/
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: false
+            show_root_heading: true
+            members_order: source
+            separate_signature: true
+            merge_init_into_class: true
+
+nav:
+  - Home: index.md
+  - Architecture: ARCHITECTURE.md
+  - Roadmap: ROADMAP.md
+  - Decisions: DECISIONS.md
+  - Spec status: SPEC_STATUS.md
+  - REST API: REST_API.md
+  - Integrations: INTEGRATIONS.md
+  - TypeScript SDK: TYPESCRIPT.md
+  - Releasing: RELEASING.md
+  - API reference: api.md
+  - Examples: examples.md
+  - References: REFERENCES.md
+
+exclude_docs: |
+  archive/
+  archive/memo.md
+  README.md
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.details
+  - tables

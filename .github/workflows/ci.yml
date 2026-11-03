@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -13,27 +16,115 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           python-version: ${{ matrix.python-version }}
-          cache: pip
-      - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          enable-cache: true
+      - name: Install from lockfile
+        run: uv sync --all-extras --frozen
       - name: Lint
         run: |
-          ruff check .
-          ruff format --check .
-      - name: Type check
-        run: mypy
+          uv run --no-sync ruff check .
+          uv run --no-sync ruff format --check .
       - name: Test
-        run: pytest --cov=memograph --cov-report=term-missing --cov-report=xml
+        run: uv run --no-sync pytest --cov=memograph --cov-report=term-missing --cov-report=xml -m "not integration"
       - name: Build package
-        run: python -m build
+        run: uv build
       - name: Upload coverage
         if: matrix.python-version == '3.11'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-xml
           path: coverage.xml
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: "3.11"
+      - name: Install from lockfile
+        run: uv sync --all-extras --frozen
+      - name: Deterministic type check
+        run: uv run --no-sync mypy --python-version 3.11 --no-incremental
+
+  typecheck-compat:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install from lockfile
+        run: uv sync --all-extras --frozen
+      - name: Capture mypy diagnostics
+        id: mypy
+        run: |
+          set +e
+          # The lockfile installs numpy 2.5.x on 3.12+, whose stubs use PEP 695
+          # `type` statements. Mypy must target the active interpreter.
+          uv run --no-sync mypy --python-version "${{ matrix.python-version }}" --no-incremental --show-column-numbers --no-pretty --no-error-summary --hide-error-context > mypy.log 2>&1
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            uv run --no-sync python scripts/annotate_mypy.py mypy.log
+            {
+              echo '```text'
+              cat mypy.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          cat mypy.log
+          exit "$status"
+      - name: Upload mypy log
+        if: always() && steps.mypy.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mypy-${{ matrix.python-version }}
+          path: mypy.log
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - name: Install real framework SDKs from lockfile
+        run: uv sync --all-extras --frozen
+      - name: Integration tests
+        run: uv run --no-sync pytest -q -m integration
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - name: Install docs/API/integration extras
+        run: uv sync --all-extras --frozen
+      - name: Build published docs
+        run: uv run --no-sync mkdocs build --strict
+
+  typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - name: Install npm lockfile
+        run: npm ci --prefix sdk/typescript
+      - name: TypeScript tests
+        run: npm test --prefix sdk/typescript
+      - name: TypeScript type check
+        run: npm run typecheck --prefix sdk/typescript

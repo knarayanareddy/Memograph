@@ -23,6 +23,11 @@ build/
 dist/
 .eggs/
 
+# Node / TypeScript
+node_modules/
+sdk/typescript/dist/
+*.tsbuildinfo
+
 # Tooling
 .pytest_cache/
 .mypy_cache/
@@ -33,6 +38,7 @@ coverage.xml
 htmlcov/
 .tox/
 .nox/
+site/
 
 # Generated docs / binaries
 docs/*.pdf

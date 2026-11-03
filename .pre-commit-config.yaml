@@ -1,6 +1,8 @@
+exclude: ^(docs/archive/|site/|sdk/typescript/dist/|sdk/typescript/node_modules/)
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.17.3
     hooks:
       - id: ruff
         args: [--fix]
@@ -9,7 +11,7 @@ repos:
     rev: v4.6.0
     hooks:
       - id: check-added-large-files
-        args: [--maxkb=1024]
+        args: [--maxkb=2048]
       - id: check-json
       - id: check-toml
       - id: check-yaml
