@@ -1,18 +1,18 @@
 [build-system]
-requires = ["hatchling>=1.24"]
+requires = ["hatchling>=1.24,<2"]
 build-backend = "hatchling.build"
 
 [project]
 name = "memograph"
-version = "0.1.0"
+version = "0.2.0"
 description = "A self-healing, bandwidth-aware memory system for AI agents"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 license = { text = "MIT" }
 authors = [{ name = "Memograph contributors" }]
 keywords = ["ai", "agents", "memory", "llm", "context"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
@@ -22,29 +22,67 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-  "aiosqlite>=0.20",
-  "httpx>=0.27",
-  "pydantic>=2.7",
-  "pydantic-settings>=2.2",
+  "aiosqlite>=0.20,<1",
+  "httpx>=0.27,<1",
+  "pydantic>=2.7,<3",
+  "pydantic-settings>=2.2,<3",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "build>=1.2",
-  "mypy>=1.9",
-  "pytest>=8.0",
-  "pytest-asyncio>=0.23",
-  "pytest-cov>=5.0",
-  "ruff>=0.4",
+  "build>=1.2,<2",
+  "mypy>=1.9,<2",
+  "pytest>=8,<10",
+  "pytest-asyncio>=0.23,<2",
+  "pytest-cov>=5,<8",
+  "ruff>=0.4,<1",
+]
+api = [
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.30,<1",
+  "websockets>=13,<18",
+]
+integrations = [
+  "langchain-core>=0.3,<2",
+  "crewai>=0.100,<2",
+  "autogen-agentchat>=0.4,<1",
+]
+docs = [
+  "mkdocs>=1.6,<2",
+  "mkdocs-material>=9.5,<10",
+  "mkdocstrings[python]>=0.25,<2",
+]
+all = [
+  "build>=1.2,<2",
+  "mypy>=1.9,<2",
+  "pytest>=8,<10",
+  "pytest-asyncio>=0.23,<2",
+  "pytest-cov>=5,<8",
+  "ruff>=0.4,<1",
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.30,<1",
+  "websockets>=13,<18",
+  "langchain-core>=0.3,<2",
+  "crewai>=0.100,<2",
+  "autogen-agentchat>=0.4,<1",
+  "mkdocs>=1.6,<2",
+  "mkdocs-material>=9.5,<10",
+  "mkdocstrings[python]>=0.25,<2",
 ]
 
 [project.scripts]
 memograph = "memograph.cli.memograph_cli:main"
+memograph-api = "memograph.api.cli:main"
 
 [project.urls]
 Repository = "https://github.com/knarayanareddy/Memograph"
 Issues = "https://github.com/knarayanareddy/Memograph/issues"
-Documentation = "https://github.com/knarayanareddy/Memograph/tree/main/docs"
+Documentation = "https://knarayanareddy.github.io/Memograph/"
+
+[tool.uv]
+# pyarrow 26.0.1 was published without Linux wheels at lockfile generation time.
+# Constrain it until a compatible manylinux release is available.
+constraint-dependencies = ["pyarrow<26"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/memograph"]
@@ -55,24 +93,39 @@ include = [
   "tests",
   "docs",
   "examples",
+  "sdk/typescript",
+  ".github/workflows",
   "README.md",
   "LICENSE",
   "CONTRIBUTING.md",
   "SECURITY.md",
   "CHANGELOG.md",
+  "Makefile",
+  ".env.example",
+  ".gitignore",
+  ".pre-commit-config.yaml",
+  "mkdocs.yml",
+  "uv.lock",
   "pyproject.toml",
+]
+exclude = [
+  "sdk/typescript/node_modules",
+  "sdk/typescript/dist",
+  "site",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+asyncio_default_test_loop_scope = "function"
 testpaths = ["tests"]
 addopts = "-q --strict-markers"
+markers = ["integration: tests requiring optional framework SDKs"]
 
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-extend-exclude = ["docs/archive", "*.md"]
+extend-exclude = ["docs/archive", "*.md", "site", "sdk/typescript/dist", "sdk/typescript/node_modules"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

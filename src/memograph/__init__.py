@@ -39,7 +39,7 @@ from .models import IndexPointer, MemoryFact, MemoryIndex, TopicFile
 from .vector_store import SQLiteVectorStore, VectorEntry, VectorMatch
 from .verification import VerificationEngine
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "AutoGenAdapter",
