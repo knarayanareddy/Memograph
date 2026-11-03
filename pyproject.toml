@@ -136,7 +136,7 @@ quote-style = "double"
 indent-style = "space"
 
 [tool.mypy]
-python_version = "3.11"
+# Target the active interpreter; CI passes --python-version explicitly.
 files = ["src/memograph"]
 ignore_missing_imports = true
 check_untyped_defs = true

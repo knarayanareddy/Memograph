@@ -28,7 +28,9 @@ def main() -> int:
 
     remaining = len(errors) - MAX_ANNOTATIONS
     if remaining > 0:
-        message = f"{remaining} additional mypy errors are in the uploaded artifact."
+        message = (
+            f"{remaining} additional mypy errors are in the job summary and uploaded artifact."
+        )
         print(f"::notice title=mypy::{escape(message)}")
     return 0
 

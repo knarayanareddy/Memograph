@@ -51,7 +51,6 @@ jobs:
 
   typecheck-compat:
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
@@ -67,7 +66,9 @@ jobs:
         id: mypy
         run: |
           set +e
-          uv run --no-sync mypy --python-version 3.11 --no-incremental --show-column-numbers --no-pretty --no-error-summary --hide-error-context > mypy.log 2>&1
+          # The lockfile installs numpy 2.5.x on 3.12+, whose stubs use PEP 695
+          # `type` statements. Mypy must target the active interpreter.
+          uv run --no-sync mypy --python-version "${{ matrix.python-version }}" --no-incremental --show-column-numbers --no-pretty --no-error-summary --hide-error-context > mypy.log 2>&1
           status=$?
           if [ "$status" -ne 0 ]; then
             uv run --no-sync python scripts/annotate_mypy.py mypy.log

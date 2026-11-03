@@ -45,5 +45,6 @@ def test_annotate_mypy_reports_extra_error_lines(tmp_path: Path) -> None:
     assert len(output) == 11
     assert all(line.startswith("::error title=mypy::") for line in output[:10])
     assert output[10] == (
-        "::notice title=mypy::2 additional mypy errors are in the uploaded artifact."
+        "::notice title=mypy::2 additional mypy errors are in the job summary "
+        "and uploaded artifact."
     )
