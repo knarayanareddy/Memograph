@@ -2,129 +2,154 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   test:
+    name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.7"
           enable-cache: true
-      - name: Install from lockfile
-        run: uv sync --all-extras --frozen
-      - name: Lint
+      - name: Install locked core dependencies
+        run: uv sync --frozen --extra dev --extra api --extra docs
+      - name: Lint and format
         run: |
-          uv run --no-sync ruff check .
-          uv run --no-sync ruff format --check .
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Type check
+        run: uv run mypy --python-version ${{ matrix.python-version }} src/memograph
       - name: Test
-        run: uv run --no-sync pytest --cov=memograph --cov-report=term-missing --cov-report=xml -m "not integration"
-      - name: Build package
+        run: uv run pytest --cov=memograph --cov-report=term-missing -m "not integration"
+      - name: Build distributions
         run: uv build
-      - name: Upload coverage
-        if: matrix.python-version == '3.11'
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-xml
-          path: coverage.xml
-
-  typecheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v10.3.3
-        with:
-          python-version: "3.11"
-      - name: Install from lockfile
-        run: uv sync --all-extras --frozen
-      - name: Deterministic type check
-        run: uv run --no-sync mypy --python-version 3.11 --no-incremental
 
   typecheck-compat:
+    name: Type check compatibility (${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install from lockfile
-        run: uv sync --all-extras --frozen
-      - name: Capture mypy diagnostics
-        id: mypy
-        run: |
-          set +e
-          # The lockfile installs numpy 2.5.x on 3.12+, whose stubs use PEP 695
-          # `type` statements. Mypy must target the active interpreter.
-          uv run --no-sync mypy --python-version "${{ matrix.python-version }}" --no-incremental --show-column-numbers --no-pretty --no-error-summary --hide-error-context > mypy.log 2>&1
-          status=$?
-          if [ "$status" -ne 0 ]; then
-            uv run --no-sync python scripts/annotate_mypy.py mypy.log
-            {
-              echo '```text'
-              cat mypy.log
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
-          cat mypy.log
-          exit "$status"
-      - name: Upload mypy log
-        if: always() && steps.mypy.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          name: mypy-${{ matrix.python-version }}
-          path: mypy.log
-
-  integration:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v10.3.3
-        with:
-          python-version: "3.11"
+          version: "0.13.7"
           enable-cache: true
-      - name: Install real framework SDKs from lockfile
-        run: uv sync --all-extras --frozen
-      - name: Integration tests
-        run: uv run --no-sync pytest -q -m integration
-
-  docs:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v10.3.3
-        with:
-          python-version: "3.11"
-          enable-cache: true
-      - name: Install docs/API/integration extras
-        run: uv sync --all-extras --frozen
-      - name: Build published docs
-        run: uv run --no-sync mkdocs build --strict
+      - name: Install locked core dependencies
+        run: uv sync --frozen --extra dev --extra api --extra docs
+      - name: Type check with matrix interpreter
+        run: uv run mypy --python-version ${{ matrix.python-version }} src/memograph
 
   typescript:
+    name: TypeScript (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["22", "24", "26"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: "22"
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node-version }}
           cache: npm
           cache-dependency-path: sdk/typescript/package-lock.json
-      - name: Install npm lockfile
+      - name: Install locked npm dependencies
         run: npm ci --prefix sdk/typescript
-      - name: TypeScript tests
-        run: npm test --prefix sdk/typescript
-      - name: TypeScript type check
+      - name: Test
+        run: npm test --prefix sdk/typescript -- --run
+      - name: Type check
         run: npm run typecheck --prefix sdk/typescript
+      - name: Build
+        run: npm run build --prefix sdk/typescript
+
+  integration:
+    name: Real SDK integrations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.7"
+          enable-cache: true
+      # This is the only job that installs the integrations extra: CrewAI pulls
+      # in ChromaDB, whose current advisories have no patched release.
+      - name: Install all locked extras
+        run: uv sync --all-extras --frozen
+      - name: Integration tests
+        run: uv run pytest -m integration
+
+  security:
+    name: Security scans
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.7"
+          enable-cache: true
+      - name: Install locked dev dependencies
+        run: uv sync --frozen --extra dev
+      - name: Bandit (source only)
+        run: uv run bandit -c pyproject.toml -r src/memograph -ll
+      - name: Ruff security rules (source only)
+        run: uv run ruff check src/memograph --select S --ignore S101
+      - name: npm audit (production dependencies)
+        run: npm audit --prefix sdk/typescript --omit=dev
+      - name: Export locked dependencies
+        run: |
+          uv export --all-extras --frozen --no-emit-project --format requirements-txt > /tmp/requirements.txt
+      - name: pip-audit with documented ChromaDB exceptions
+        # ChromaDB 1.5.9 is the latest release and these advisories have no
+        # patched version. See SECURITY.md; remove each ignore when fixed.
+        run: |
+          uvx --from 'pip-audit==2.10.1' pip-audit \
+            -r /tmp/requirements.txt \
+            --vulnerability-service pypi \
+            --progress-spinner off \
+            --format json \
+            --ignore-vuln GHSA-f4j7-r4q5-qw2c \
+            --ignore-vuln GHSA-36p7-vc44-83pf \
+            --ignore-vuln GHSA-xph7-9rjv-w5fr \
+            --ignore-vuln GHSA-2wm9-hf6c-p5cr

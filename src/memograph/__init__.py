@@ -239,9 +239,9 @@ class MemoGraph:
         manager = await self._get_manager()
         await manager.reconcile()
 
-    async def dream_now(self, force: bool = False) -> DreamResult:
+    async def dream_now(self, force: bool = False, max_tokens: int | None = None) -> DreamResult:
         manager = await self._get_manager()
-        return await manager.dream_now(force)
+        return await manager.dream_now(force, max_tokens)
 
     async def vector_store(self) -> SQLiteVectorStore:
         manager = await self._get_manager()

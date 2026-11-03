@@ -7,7 +7,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from memograph import memory_manager as manager_module
 from memograph.atomic import read_text, remove_file
-from memograph.config import ConfidenceLevel
+from memograph.config import ConfidenceLevel, MemoryLimits
 from memograph.errors import ValidationError
 from memograph.models import TopicFile
 
@@ -121,3 +121,18 @@ async def test_transcripts_context_and_status(manager):
     assert status["topics"]["total"] == 1
     assert status["index"]["pointers"] == 1
     assert status["index"]["bytes"] <= status["index"]["max_bytes"]
+
+
+async def test_grep_enforces_pattern_length(manager):
+    with pytest.raises(ValidationError, match="pattern too long"):
+        await manager.grep_transcripts("a" * 201, regex=True)
+
+
+async def test_grep_regex_timeout(config_factory):
+    config = config_factory(limits=MemoryLimits(grep_timeout_seconds=0.001))
+    async with manager_module.MemoryManager(config=config) as manager:
+        await manager.start_session("session_timeout")
+        await manager.archive_turn("user", "a" * 1000 + "b")
+        await manager.end_session()
+        with pytest.raises(ValidationError, match="timed out"):
+            await manager.grep_transcripts("(a|aa)+$", regex=True)

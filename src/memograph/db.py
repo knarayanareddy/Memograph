@@ -544,7 +544,7 @@ class DatabaseManager:
         set_clause = ", ".join(f"{key} = ?" for key, _ in updates)
         values = [value for _, value in updates] + [agent_id, run_id]
         await self.execute(
-            f"UPDATE dream_runs SET {set_clause} WHERE agent_id = ? AND run_id = ?",
+            f"UPDATE dream_runs SET {set_clause} WHERE agent_id = ? AND run_id = ?",  # noqa: S608  # nosec
             tuple(values),
         )
 

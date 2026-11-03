@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from .audit import audit
 from .auth import APIKeyAuth
 from .events import EventBroker, make_event
+from .middleware import RequestIDMiddleware, RequestSizeLimitMiddleware
 from .rate_limit import RateLimiter
 from .settings import APISettings
 
@@ -14,6 +16,9 @@ __all__ = [
     "APISettings",
     "EventBroker",
     "RateLimiter",
+    "RequestIDMiddleware",
+    "RequestSizeLimitMiddleware",
+    "audit",
     "create_app",
     "make_event",
 ]

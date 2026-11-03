@@ -4,11 +4,14 @@ Install the real framework SDKs with:
 
 ```bash
 pip install -e ".[integrations]"
-# or with the lockfile:
+# or, for the dedicated integration job only:
 uv sync --all-extras --frozen
 ```
 
 These modules are imported lazily and are not required by core Memograph.
+CrewAI pulls in `chromadb`, whose current advisories have no patched release;
+see [SECURITY.md](https://github.com/knarayanareddy/Memograph/blob/main/SECURITY.md).
+Core CI jobs use narrow extras and do not install this dependency.
 
 ## LangChain
 

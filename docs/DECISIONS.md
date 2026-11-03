@@ -90,15 +90,16 @@ real SDK packages are declared in the `integrations` extra and installed in CI.
 
 `MemographClient` covers the REST API and WebSocket events. `LocalMemograph`
 reimplements the core SQLite-backed store, generated views, index limits,
-transcripts, and offline consolidation for Node.js 22.5+ using experimental
+transcripts, and offline consolidation for Node.js 22, 24, and 26 using
 `node:sqlite`. This avoids bundling a Python runtime while keeping the same
-validation and stable-ID rules.
+validation, bounded grep, `realpath` path containment, and stable-ID rules.
 
 ## ADR 14 — `uv.lock` is the canonical Python lock
 
 A single `uv.lock` resolves every declared extra. CI uses `uv sync --frozen`
-instead of installing floating minimum versions. This makes Python 3.11–3.13
-runs reproducible without a separate `requirements-dev.txt`.
+instead of installing floating minimum versions; core jobs select narrow
+extras and only the real SDK integration job installs `--all-extras`. This makes
+Python 3.11–3.13 runs reproducible without a separate `requirements-dev.txt`.
 
 ## ADR 15 — Releases use trusted publishing
 

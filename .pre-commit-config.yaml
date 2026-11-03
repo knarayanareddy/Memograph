@@ -2,19 +2,33 @@ exclude: ^(docs/archive/|site/|sdk/typescript/dist/|sdk/typescript/node_modules/
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.3
+    rev: 25bcf95026b96e2dd3c0aec3090c3d6ef6ca2e6c # v0.17.3
     hooks:
       - id: ruff
         args: [--fix]
       - id: ruff-format
+      - id: ruff
+        name: ruff-security
+        args: [--select, S, --ignore, S101, --no-fix]
+        files: ^src/memograph/
+  - repo: https://github.com/PyCQA/bandit
+    rev: 92ae8b82fb422a639f0ed8d99e96cea769594e08 # 1.9.4
+    hooks:
+      - id: bandit
+        name: bandit-source
+        args: [-c, pyproject.toml, -r, src/memograph, -ll]
+        pass_filenames: false
+        additional_dependencies: ["bandit[toml]==1.9.4"]
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # v6.0.0
     hooks:
       - id: check-added-large-files
         args: [--maxkb=2048]
       - id: check-json
+      - id: check-merge-conflict
       - id: check-toml
       - id: check-yaml
+      - id: debug-statements
       - id: end-of-file-fixer
       - id: trailing-whitespace
       - id: detect-private-key

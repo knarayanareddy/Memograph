@@ -10,10 +10,19 @@ from __future__ import annotations
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
-from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from .errors import ConfigurationError
 from .validation import validate_agent_id
 
 
@@ -43,10 +52,12 @@ class MemoryLimits(BaseModel):
     min_consolidation_hours: int = 24
     min_consolidation_sessions: int = 5
     min_scan_interval_minutes: int = 10
+    max_grep_pattern_chars: int = 200
+    grep_timeout_seconds: float = 0.05
 
     @field_validator("*")
     @classmethod
-    def _positive(cls, value: int) -> int:
+    def _positive(cls, value: int | float) -> int | float:
         if value <= 0:
             raise ValueError("limits must be positive")
         return value
@@ -55,12 +66,26 @@ class MemoryLimits(BaseModel):
 class ProviderConfig(BaseModel):
     """Resolved connection settings for one LLM provider."""
 
+    model_config = ConfigDict(validate_assignment=True)
+
     provider: LLMProvider
     api_key: str = ""
     model: str = ""
     base_url: str = ""
     timeout: float = 60.0
     max_tokens: int = 4096
+
+    @field_validator("base_url")
+    @classmethod
+    def _safe_base_url(cls, value: str) -> str:
+        if not value:
+            return value
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("provider base_url must be an http(s) URL with a host")
+        if parsed.username or parsed.password:
+            raise ValueError("provider base_url must not contain credentials")
+        return value
 
 
 class MemoGraphConfig(BaseSettings):
@@ -139,7 +164,8 @@ class MemoGraphConfig(BaseSettings):
 
     @property
     def resolved_db_path(self) -> Path:
-        assert self.db_path is not None
+        if self.db_path is None:
+            raise ConfigurationError("Memograph database path is not configured")
         return self.db_path
 
     def get_active_provider_config(

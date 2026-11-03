@@ -1,23 +1,28 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import { LocalMemograph } from "./local.js";
-import { MemographError, assertTopicId, stableId } from "./validation.js";
+import {
+  MemographError,
+  assertApiKey,
+  assertLiteralPattern,
+  assertRegexPattern,
+  assertTopicId,
+  safePath,
+  stableId,
+  validateBaseUrl,
+} from "./validation.js";
 
 test("local store persists facts, views, context, and dream state", async () => {
   const dir = await mkdtemp(join(tmpdir(), "memograph-ts-"));
   const mg = new LocalMemograph({ basePath: dir });
   await mg.open();
   try {
-    const result = await mg.remember(
-      "project_stack",
-      "Uses FastAPI and SQLite",
-      "test",
-    );
+    const result = await mg.remember("project_stack", "Uses FastAPI and SQLite", "test");
     assert.equal(result.success, true);
     assert.ok(result.fact_id?.startsWith("fact_"));
 
@@ -68,14 +73,45 @@ test("local store archives transcripts and validates regex", async () => {
     await mg.archiveTurn("assistant", "SQLite is canonical");
     assert.equal((await mg.recentSignals()).length, 2);
     assert.equal((await mg.grepTranscripts("FastAPI")).length, 1);
-    await assert.rejects(
-      () => mg.grepTranscripts("[", 20, true),
-      MemographError,
-    );
+    await assert.rejects(() => mg.grepTranscripts("[", 20, true), MemographError);
+    await assert.rejects(() => mg.grepTranscripts("(a+)+$", 20, true), /catastrophic/);
+    await assert.rejects(() => mg.grepTranscripts("a".repeat(201), 20, true), /too long/);
+    await assert.rejects(() => mg.grepTranscripts("FastAPI", 101, false), /max_results/);
     await mg.endSession();
   } finally {
     await mg.close();
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("literal grep escapes metacharacters", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "memograph-ts-"));
+  const mg = new LocalMemograph({ basePath: dir });
+  await mg.open();
+  try {
+    await mg.startSession("session_1");
+    await mg.archiveTurn("user", "a.b");
+    assert.equal((await mg.grepTranscripts("a.b")).length, 1);
+    await mg.endSession();
+  } finally {
+    await mg.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("safePath rejects symlink escapes", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "memograph-ts-"));
+  const outside = await mkdtemp(join(tmpdir(), "memograph-outside-"));
+  try {
+    await mkdir(join(dir, "topics"));
+    await symlink(outside, join(dir, "topics", "escape"));
+    assert.throws(
+      () => safePath(join(dir, "topics"), "escape", "file.json"),
+      MemographError,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
   }
 });
 
@@ -84,4 +120,11 @@ test("validation helpers are deterministic and strict", () => {
   assert.equal(assertTopicId("project_stack"), "project_stack");
   assert.equal(stableId("same-input"), stableId("same-input"));
   assert.notEqual(stableId("a"), stableId("b"));
+  assert.throws(() => validateBaseUrl("http://example.test"), /https/);
+  assert.throws(() => validateBaseUrl("https://user:pass@example.test"), /credentials/);
+  assert.equal(validateBaseUrl("https://example.test"), "https://example.test/");
+  assert.throws(() => assertApiKey("short"), MemographError);
+  assert.throws(() => assertRegexPattern("(a+)+$"), MemographError);
+  assert.throws(() => assertRegexPattern("a".repeat(201)), MemographError);
+  assert.equal(assertLiteralPattern("a.b"), "a\\.b");
 });

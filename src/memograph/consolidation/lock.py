@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ..errors import ConfigurationError
+
 try:
     import fcntl as _fcntl
 except ImportError:  # pragma: no cover - POSIX-only project
@@ -46,7 +48,8 @@ class ConsolidationLock:
         return os.open(self.lock_path, os.O_CREAT | os.O_RDWR, 0o600)
 
     def _try_lock(self, fd: int) -> bool:
-        assert _fcntl is not None
+        if _fcntl is None:
+            raise ConfigurationError("ConsolidationLock requires POSIX fcntl support")
         try:
             _fcntl.flock(fd, _fcntl.LOCK_EX | _fcntl.LOCK_NB)
             return True
@@ -54,7 +57,8 @@ class ConsolidationLock:
             return False
 
     def _release(self, fd: int) -> None:
-        assert _fcntl is not None
+        if _fcntl is None:
+            raise ConfigurationError("ConsolidationLock requires POSIX fcntl support")
         try:
             _fcntl.flock(fd, _fcntl.LOCK_UN)
         except OSError:

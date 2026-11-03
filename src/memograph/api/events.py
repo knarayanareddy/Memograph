@@ -8,6 +8,8 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
+from ..errors import ResourceLimitError
+
 
 def make_event(event_type: str, **payload: Any) -> dict[str, Any]:
     return {
@@ -18,13 +20,19 @@ def make_event(event_type: str, **payload: Any) -> dict[str, Any]:
 
 
 class EventBroker:
-    def __init__(self, max_queue_size: int = 100):
+    def __init__(self, max_queue_size: int = 100, max_subscribers: int = 100):
+        if max_subscribers < 1:
+            raise ValueError("max_subscribers must be positive")
         self.max_queue_size = max_queue_size
+        self.max_subscribers = max_subscribers
         self._subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
 
     @property
     def subscriber_count(self) -> int:
         return len(self._subscribers)
+
+    def can_subscribe(self) -> bool:
+        return len(self._subscribers) < self.max_subscribers
 
     def publish(self, event: dict[str, Any]) -> int:
         delivered = 0
@@ -43,6 +51,8 @@ class EventBroker:
 
     @asynccontextmanager
     async def subscription(self) -> AsyncIterator[asyncio.Queue[dict[str, Any]]]:
+        if not self.can_subscribe():
+            raise ResourceLimitError("Too many WebSocket subscribers")
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=self.max_queue_size)
         self._subscribers.add(queue)
         try:

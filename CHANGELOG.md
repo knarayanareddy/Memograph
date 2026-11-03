@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased — security hardening
+
+- Documented and enforced the REST service as an explicitly single-user,
+  shared-key application; added a startup gate against unimplemented
+  per-client authorization and required a 16-character minimum API key.
+- Changed the API default bind host to `127.0.0.1`, added structured JSON audit
+  logging, request IDs, hard HTTP body limits, WebSocket connection caps,
+  separate consolidation quotas, and configurable LLM token limits.
+- Replaced Python `re` with timeout-capable `regex` for caller-supplied grep
+  patterns, capped pattern length, escaped consolidation prompt delimiters, and
+  removed production `assert` statements.
+- Moved Gemini API keys from URL query parameters to the `x-goog-api-key`
+  header and added validation for provider base URLs.
+- Aligned TypeScript validation with Python limits, added `realpath`-based path
+  containment, HTTPS/WSS enforcement for remote clients, bounded transcript
+  grep patterns/results, and Node 26/TypeScript 7 toolchain updates.
+- SHA-pinned GitHub Actions, disabled persisted checkout credentials, enabled
+  Dependabot, added Bandit/Ruff-security/npm-audit/isolated pip-audit scans,
+  and documented unpatched ChromaDB advisories with explicit audit exceptions.
+- Narrowed core CI installs to `dev`/`api`/`docs` extras, isolated `--all-extras`
+  to the real SDK integration job, updated Node/Python/action versions, and
+  upgraded the locked `pyarrow` to 26.0.1 without disrupting CrewAI.
+
 ## 0.2.0 — APIs, SDKs, docs, and reproducible releases
 
 - Added an optional FastAPI REST/WebSocket service with required API-key auth,

@@ -14,15 +14,16 @@ class _StrictModel(BaseModel):
 class HealthResponse(_StrictModel):
     status: str = "ok"
     version: str = ""
+    auth_model: str = "single-user-shared-key"
 
 
 class RememberRequest(_StrictModel):
-    topic_id: str
-    content: str
-    source: str = "api"
-    confidence: str | None = None
-    tags: list[str] = Field(default_factory=list)
-    verification_hint: str | None = None
+    topic_id: str = Field(min_length=1, max_length=50)
+    content: str = Field(min_length=1, max_length=1000)
+    source: str = Field(default="api", min_length=1, max_length=200)
+    confidence: str | None = Field(default=None, max_length=20)
+    tags: list[str] = Field(default_factory=list, max_length=20)
+    verification_hint: str | None = Field(default=None, max_length=200)
 
 
 class WriteResultResponse(_StrictModel):
@@ -34,22 +35,22 @@ class WriteResultResponse(_StrictModel):
 
 
 class ForgetRequest(_StrictModel):
-    topic_id: str
-    fact_id: str | None = None
+    topic_id: str = Field(min_length=1, max_length=50)
+    fact_id: str | None = Field(default=None, max_length=100)
 
 
 class UpdateRequest(_StrictModel):
-    topic_id: str
-    fact_id: str
-    new_content: str | None = None
-    new_confidence: str | None = None
-    verification_source: str | None = None
+    topic_id: str = Field(min_length=1, max_length=50)
+    fact_id: str = Field(min_length=1, max_length=100)
+    new_content: str | None = Field(default=None, max_length=1000)
+    new_confidence: str | None = Field(default=None, max_length=20)
+    verification_source: str | None = Field(default=None, max_length=200)
 
 
 class ContextRequest(_StrictModel):
-    query: str
+    query: str = Field(min_length=1, max_length=1000)
     max_topics: int = Field(default=3, ge=1, le=20)
-    token_budget: int | None = Field(default=None, ge=1)
+    token_budget: int | None = Field(default=None, ge=1, le=100_000)
 
 
 class ContextResponse(_StrictModel):
@@ -67,7 +68,7 @@ class DreamRequest(_StrictModel):
 
 
 class GrepRequest(_StrictModel):
-    pattern: str
+    pattern: str = Field(min_length=1, max_length=200)
     max_results: int = Field(default=20, ge=1, le=100)
     regex: bool = False
 

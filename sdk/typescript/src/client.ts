@@ -16,13 +16,20 @@ import type {
   UpdateRequest,
   WriteResult,
 } from "./types.js";
-import { MemographError } from "./validation.js";
+import {
+  MAX_REQUEST_BYTES,
+  MemographError,
+  assertApiKey,
+  assertRegexPattern,
+  validateBaseUrl,
+} from "./validation.js";
 
 export interface MemographClientOptions {
   baseUrl: string;
   apiKey: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
+  maxRequestBytes?: number;
 }
 
 class WsEventSubscription implements EventSubscription {
@@ -84,15 +91,23 @@ export class MemographClient {
   private readonly apiKey: string;
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutMs: number;
+  private readonly maxRequestBytes: number;
 
   constructor(options: MemographClientOptions) {
-    this.baseUrl = options.baseUrl.replace(/\/+$/, "") + "/";
-    this.apiKey = options.apiKey;
+    this.baseUrl = validateBaseUrl(options.baseUrl);
+    this.apiKey = assertApiKey(options.apiKey);
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch;
     this.timeoutMs = options.timeoutMs ?? 30_000;
+    this.maxRequestBytes = options.maxRequestBytes ?? MAX_REQUEST_BYTES;
   }
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    if (typeof init.body === "string") {
+      const bytes = new TextEncoder().encode(init.body).length;
+      if (bytes > this.maxRequestBytes) {
+        throw new MemographError("Request body too large", 413);
+      }
+    }
     const url = new URL(path.replace(/^\//, ""), this.baseUrl).toString();
     const headers = new Headers(init.headers);
     headers.set("X-API-Key", this.apiKey);
@@ -188,6 +203,7 @@ export class MemographClient {
   }
 
   grep(payload: GrepRequest): Promise<Array<Record<string, unknown>>> {
+    if (payload.regex) assertRegexPattern(payload.pattern);
     return this.request<Array<Record<string, unknown>>>("grep", {
       method: "POST",
       body: this.jsonBody(payload),

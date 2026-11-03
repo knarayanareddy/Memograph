@@ -13,17 +13,18 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import regex as re
+
 from .atomic import atomic_append_line, atomic_write_text, read_text, remove_file
 from .config import ConfidenceLevel, MemoGraphConfig
 from .db import DatabaseManager
-from .errors import ValidationError
+from .errors import ConfigurationError, ValidationError
 from .injection import BuiltContext, TokenBudgetManager
 from .llm import LLMRequest, Message
 from .models import IndexPointer, MemoryFact, MemoryIndex, TopicFile
@@ -628,7 +629,8 @@ class MemoryManager:
             await self._ensure_initialized_unlocked()
             if self._current_session is None:
                 await self._start_session_unlocked(None)
-            assert self._current_session is not None
+            if self._current_session is None:
+                raise ConfigurationError("Session was not started")
             payload = {
                 "ts": _now_iso(),
                 "role": role.strip(),
@@ -668,15 +670,24 @@ class MemoryManager:
     async def grep_transcripts(
         self, pattern: str, max_results: int = 20, regex: bool = False
     ) -> list[dict[str, Any]]:
-        """Grep transcript lines without loading them into model context."""
+        """Grep transcript lines without loading them into model context.
+
+        Regex mode uses the ``regex`` module with a per-match timeout so a
+        caller-supplied catastrophic pattern cannot monopolize the event loop.
+        """
         if not isinstance(pattern, str) or not pattern:
             raise ValidationError("pattern must be a non-empty string")
+        if len(pattern) > self.config.limits.max_grep_pattern_chars:
+            raise ValidationError(
+                f"pattern too long: {len(pattern)} > {self.config.limits.max_grep_pattern_chars}"
+            )
         if max_results <= 0:
             return []
         try:
             needle = re.compile(pattern if regex else re.escape(pattern), re.IGNORECASE)
         except re.error as exc:
             raise ValidationError(f"Invalid grep pattern: {exc}") from exc
+        timeout = self.config.limits.grep_timeout_seconds
         async with self._lock:
             await self._ensure_initialized_unlocked()
             results: list[dict[str, Any]] = []
@@ -686,7 +697,11 @@ class MemoryManager:
                 except OSError:
                     continue
                 for line_number, line in enumerate(text.splitlines(), 1):
-                    if needle.search(line[:2000]):
+                    try:
+                        matched = needle.search(line[:2000], timeout=timeout)
+                    except TimeoutError as exc:
+                        raise ValidationError("Regex search timed out") from exc
+                    if matched:
                         results.append(
                             {
                                 "session_id": path.stem,
@@ -704,9 +719,9 @@ class MemoryManager:
 
     # ── Consolidation ────────────────────────────────────────────────────────
 
-    async def dream_now(self, force: bool = False) -> DreamResult:
+    async def dream_now(self, force: bool = False, max_tokens: int | None = None) -> DreamResult:
         from .consolidation.engine import DreamEngine
 
         await self.initialize()
-        engine = DreamEngine(self)
+        engine = DreamEngine(self, max_tokens=max_tokens or 2048)
         return await engine.run(trigger="manual", force=force)
