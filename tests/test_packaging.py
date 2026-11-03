@@ -70,6 +70,11 @@ def test_lockfiles_and_release_automation():
     release = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
     assert "astral-sh/setup-uv@v10.3.3" in ci
     assert "uv sync --all-extras --frozen" in ci
+    assert "mypy --python-version 3.11 --no-incremental" in ci
+    assert "typecheck-compat" in ci
+    assert "continue-on-error: true" in ci
+    assert "scripts/annotate_mypy.py" in ci
+    assert "$GITHUB_STEP_SUMMARY" in ci
     assert "npm ci --prefix sdk/typescript" in ci
     assert "mkdocs build --strict" in ci
     assert "actions/deploy-pages@v4" in docs

@@ -26,8 +26,6 @@ jobs:
         run: |
           uv run --no-sync ruff check .
           uv run --no-sync ruff format --check .
-      - name: Type check
-        run: uv run --no-sync mypy
       - name: Test
         run: uv run --no-sync pytest --cov=memograph --cov-report=term-missing --cov-report=xml -m "not integration"
       - name: Build package
@@ -38,6 +36,55 @@ jobs:
         with:
           name: coverage-xml
           path: coverage.xml
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: "3.11"
+      - name: Install from lockfile
+        run: uv sync --all-extras --frozen
+      - name: Deterministic type check
+        run: uv run --no-sync mypy --python-version 3.11 --no-incremental
+
+  typecheck-compat:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install from lockfile
+        run: uv sync --all-extras --frozen
+      - name: Capture mypy diagnostics
+        id: mypy
+        run: |
+          set +e
+          uv run --no-sync mypy --python-version 3.11 --no-incremental --show-column-numbers --no-pretty --no-error-summary --hide-error-context > mypy.log 2>&1
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            uv run --no-sync python scripts/annotate_mypy.py mypy.log
+            {
+              echo '```text'
+              cat mypy.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          cat mypy.log
+          exit "$status"
+      - name: Upload mypy log
+        if: always() && steps.mypy.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mypy-${{ matrix.python-version }}
+          path: mypy.log
 
   integration:
     runs-on: ubuntu-latest
