@@ -1,3 +1,7 @@
+> **Archived historical design draft.** This un-fenced export is superseded by
+> `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, and `docs/DECISIONS.md`. Do not
+> implement from this file; it is retained only for provenance.
+
 🧠 MemoGraph — Complete Build Architecture
 A Self-Healing, Bandwidth-Aware Memory System for AI Agents
 Inspired by Claude Code's leaked src/services/autoDream/, consolidationLock.ts, consolidationPrompt.ts, and MEMORY.md architecture
